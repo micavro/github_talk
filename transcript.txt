@@ -438,6 +438,60 @@ Pages 已经通过 API 打开了，返回的发布地址是 `https://micavro.git
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+linux怎么复制文件。
+
+===== assistant =====
+最常用是 `cp`：
+
+```bash
+cp 源文件 目标文件
+cp 源文件 目标目录/
+cp -r 源目录 目标目录/
+```
+
+例子：
+
+```bash
+cp a.txt b.txt
+cp a.txt /tmp/
+cp -r mydir /tmp/
+```
+
+如果想保留权限、时间戳、软链接等，备份目录时更推荐：
+
+```bash
+cp -a 源目录 目标目录/
+```
+
+常用参数：
+
+```bash
+cp -i 源 目标    # 覆盖前询问
+cp -v 源 目标    # 显示复制过程
+cp -r 目录 目标  # 递归复制目录
+cp -a 目录 目标  # 归档复制，尽量保留原属性
+```
+
+如果是从本机复制到远程服务器：
+
+```bash
+scp file.txt user@host:/path/
+scp -r mydir user@host:/path/
+```
+
+比如你要把 Ascend 驱动包放到服务器的修复目录：
+
+```bash
+mkdir -p /root/ascend_fix
+cp /path/to/Ascend-hdk-*.run /root/ascend_fix/
+```
+
+已同步到 `github_talk`。
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 那你教我怎么在宿主机驱动修复
 
 ===== assistant =====
