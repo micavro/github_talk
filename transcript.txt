@@ -438,6 +438,96 @@ Pages 已经通过 API 打开了，返回的发布地址是 `https://micavro.git
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+docker image下载完成后，应该怎么设置？我记得我n卡驱动，npu-sim命令坏的好像也没安装。
+
+===== assistant =====
+镜像下载完以后，镜像本身不用再“安装”。关键是宿主机必须先有 Ascend NPU 驱动和设备节点；这个不是容器镜像能补的。你说的 `npu-sim` 应该是 `npu-smi`。
+
+先在公司服务器宿主机上检查：
+
+```bash
+ls -l /dev/davinci* /dev/davinci_manager /dev/devmm_svm /dev/hisi_hdc
+command -v npu-smi
+npu-smi info
+
+ls -l /usr/local/bin/npu-smi
+ls -ld /usr/local/dcmi
+ls -ld /usr/local/Ascend/driver/lib64
+ls -l /usr/local/Ascend/driver/version.info
+ls -l /etc/ascend_install.info
+```
+
+如果这些文件或设备节点不存在，说明宿主机 Ascend 驱动/CANN 还没装好，或者驱动服务没起来。要先在宿主机修驱动；容器里装 `npu-smi` 没用，因为容器用的是宿主机的 NPU 驱动和 `/dev/davinci*` 设备。
+
+如果只是 `npu-smi` 不在 `/usr/local/bin/npu-smi`，先找真实位置：
+
+```bash
+sudo find /usr/local/Ascend -name npu-smi -type f 2>/dev/null
+command -v npu-smi
+```
+
+然后把 docker 命令里的这一行：
+
+```bash
+-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
+```
+
+改成真实路径，例如：
+
+```bash
+-v /真实路径/npu-smi:/usr/local/bin/npu-smi:ro \
+```
+
+驱动确认 OK 后，可以这样启动容器，强制用本地镜像：
+
+```bash
+mkdir -p ~/lhy/vllm-ascend0615
+
+export DEVICE=/dev/davinci0
+export IMAGE=quay.io/ascend/vllm-ascend:v0.20.2rc1
+export PROXY=http://120.63.76.132:3130
+
+docker run --rm \
+  --name vllm-ascend \
+  --pull=never \
+  --shm-size=1g \
+  --device $DEVICE \
+  --device /dev/davinci_manager \
+  --device /dev/devmm_svm \
+  --device /dev/hisi_hdc \
+  -v /usr/local/dcmi:/usr/local/dcmi:ro \
+  -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro \
+  -v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/:ro \
+  -v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info:ro \
+  -v /etc/ascend_install.info:/etc/ascend_install.info:ro \
+  -v /root/.cache:/root/.cache \
+  -v ~/lhy/vllm-ascend0615:/root/lhy/vllm-ascend0615 \
+  -w /root/lhy/vllm-ascend0615 \
+  -e HTTP_PROXY=$PROXY \
+  -e HTTPS_PROXY=$PROXY \
+  -e http_proxy=$PROXY \
+  -e https_proxy=$PROXY \
+  -e NO_PROXY=localhost,127.0.0.1,::1 \
+  -p 8000:8000 \
+  -it $IMAGE bash
+```
+
+进容器后先验证：
+
+```bash
+ls -l /dev/davinci0
+npu-smi info
+python -c "import vllm; print(vllm.__version__)"
+```
+
+如果 `npu-smi info` 在宿主机都坏，那先别折腾容器，优先修宿主机 Ascend 驱动。`vllm-ascend` 这套不是 NVIDIA，不需要 `nvidia-smi` 或 N 卡驱动，需要的是昇腾 NPU 驱动、设备节点和匹配的 driver/CANN 运行环境。
+
+已同步到 `github_talk`。
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 apt-get update 现在遇到：Could not handshake, Error in the certification verification. 这怎么办。 
 
 ===== assistant =====
