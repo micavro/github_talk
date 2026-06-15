@@ -438,6 +438,87 @@ Pages 已经通过 API 打开了，返回的发布地址是 `https://micavro.git
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+办公室电脑是windows。网站没更新？
+
+===== assistant =====
+Windows 上就是把 cntlm 当成办公室电脑上的“代理出口”。公司服务器统一配这个，不写账号密码：
+
+```text
+http://120.63.76.132:3130
+```
+
+办公室 Windows 上先确认 cntlm 监听的地址：
+
+```powershell
+netstat -ano | findstr :3130
+Get-NetTCPConnection -LocalPort 3130
+```
+
+如果看到的是 `127.0.0.1:3130`，公司服务器连不到。把 cntlm 配置文件里的监听改成 VPN 网卡可访问的地址，常见配置文件在 `C:\Program Files (x86)\Cntlm\cntlm.ini` 或 `C:\Program Files\Cntlm\cntlm.ini`：
+
+```text
+Listen 0.0.0.0:3130
+```
+
+或者更收敛一点：
+
+```text
+Listen 120.63.76.132:3130
+```
+
+然后管理员 PowerShell 重启：
+
+```powershell
+Restart-Service cntlm
+```
+
+Windows 防火墙也要放行 TCP 3130，最好只允许公司服务器 IP 或 VPN 小网：
+
+```powershell
+New-NetFirewallRule -DisplayName "CNTLM 3130 from VPN" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3130 -RemoteAddress 公司服务器IP
+```
+
+公司服务器上先测链路：
+
+```bash
+nc -vz 120.63.76.132 3130
+curl -v -x http://120.63.76.132:3130 https://quay.io/v2/
+```
+
+能通以后，Docker daemon 配：
+
+```bash
+sudo mkdir -p /etc/systemd/system/docker.service.d
+
+sudo tee /etc/systemd/system/docker.service.d/http-proxy.conf >/dev/null <<'EOF'
+[Service]
+Environment=
+Environment="HTTP_PROXY=http://120.63.76.132:3130"
+Environment="HTTPS_PROXY=http://120.63.76.132:3130"
+Environment="NO_PROXY=localhost,127.0.0.1,::1"
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+docker info | grep -i proxy
+```
+
+`systemctl show docker -p Environment` 里也应该只显示 `120.63.76.132:3130`，不会再有明文账号密码。
+
+网站没更新的问题：我这次把首页改成每次用 `transcript.txt?v=时间戳` 拉取，避免浏览器/GitHub Pages 缓存旧的 `transcript.txt`，并已经重新 push。你可以直接打开：
+
+[https://micavro.github.io/github_talk/](https://micavro.github.io/github_talk/)
+
+如果还是旧内容，先用 Ctrl+F5 强刷，或者直接看原文文件：
+
+[https://micavro.github.io/github_talk/transcript.txt](https://micavro.github.io/github_talk/transcript.txt)
+
+已同步到 `github_talk`。
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 不对啊 我是通过办公室电脑连vpn，然后办公室电脑开cnmlt在3130端口，然后vpn小网通过ip:端口 来代理。
 办公室电脑vpn显示地址是120.63.76.132，办公室电脑开了ctnlm在3130端口。这下怎么设置公司服务器？
 
