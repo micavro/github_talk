@@ -438,6 +438,91 @@ Pages 已经通过 API 打开了，返回的发布地址是 `https://micavro.git
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+apt-get update 现在遇到：Could not handshake, Error in the certification verification. 这怎么办。 
+
+===== assistant =====
+这个已经不是“连不上代理”了，而是 apt 通过代理连到 HTTPS 源后，TLS 证书校验失败。最常见有两种原因：
+
+1. apt 的 HTTPS 代理写错成了 `https://120.63.76.132:3130`
+2. 公司代理/安全网关做了 HTTPS 证书替换，但服务器或容器里不信任它的根证书
+
+先确认 apt 代理必须是 `http://`，即使访问的是 HTTPS 源也一样：
+
+```bash
+apt-config dump | grep -i proxy
+```
+
+应该是：
+
+```text
+Acquire::http::Proxy "http://120.63.76.132:3130/";
+Acquire::https::Proxy "http://120.63.76.132:3130/";
+```
+
+如果不是，改掉：
+
+```bash
+cat >/etc/apt/apt.conf.d/95proxies <<'EOF'
+Acquire::http::Proxy "http://120.63.76.132:3130/";
+Acquire::https::Proxy "http://120.63.76.132:3130/";
+EOF
+```
+
+如果还是证书错误，最快的办法是把 apt 源从 `https://` 改成 `http://`。Ubuntu/Debian 的 apt 包本身有 GPG 签名校验，用 HTTP 通常可以解决这种代理证书问题：
+
+```bash
+grep -Rni 'https://' /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null
+
+sed -i 's#https://#http://#g' /etc/apt/sources.list 2>/dev/null || true
+sed -i 's#https://#http://#g' /etc/apt/sources.list.d/*.list 2>/dev/null || true
+sed -i 's#https://#http://#g' /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+
+apt-get update
+```
+
+如果你是在容器里操作，通常就是 root，不需要 `sudo`。如果是在宿主机上，就把上面的写文件命令前面加 `sudo`。
+
+更正规的办法是导入公司代理的根证书。你需要从办公室 Windows 或公司安全网关导出根证书，比如 `company-proxy-ca.crt`，然后在服务器或容器里：
+
+```bash
+cp company-proxy-ca.crt /usr/local/share/ca-certificates/company-proxy-ca.crt
+update-ca-certificates
+apt-get update
+```
+
+如果现在连 `ca-certificates` 都装不了，可以先临时把 apt 源改成 HTTP，装好证书包后再导入公司 CA：
+
+```bash
+apt-get update
+apt-get install -y ca-certificates
+update-ca-certificates
+```
+
+不建议长期用这个，但应急时可以临时关闭 apt 的 HTTPS 校验：
+
+```bash
+cat >/etc/apt/apt.conf.d/99-noverify-temp <<'EOF'
+Acquire::https::Verify-Peer "false";
+Acquire::https::Verify-Host "false";
+EOF
+
+apt-get update
+apt-get install -y ca-certificates curl
+rm -f /etc/apt/apt.conf.d/99-noverify-temp
+```
+
+我建议你现在按这个顺序来：
+
+1. `apt-config dump | grep -i proxy`，确认 `https` 代理也是 `http://120.63.76.132:3130/`
+2. 把 apt 源里的 `https://` 临时替换成 `http://`
+3. `apt-get update && apt-get install -y curl ca-certificates`
+
+已同步到 `github_talk`。
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 我docker pull quay.io/ascend跑成功了，现在在下载，是不是就可以了，以后直接用本地镜像。 apt相关我该怎么更新？
 
 ===== user =====
