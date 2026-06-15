@@ -438,6 +438,115 @@ Pages 已经通过 API 打开了，返回的发布地址是 `https://micavro.git
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+那你教我怎么在宿主机驱动修复
+
+===== assistant =====
+可以，按“宿主机修 Ascend 驱动”的最稳流程来。先说结论：`apt-get` 只负责装编译依赖，驱动/固件本体用昇腾官方 `.run` 包覆盖安装；修复时通常要重启。
+
+1. 先确认环境和旧驱动
+
+```bash
+uname -r
+uname -m
+cat /etc/os-release
+cat /usr/local/Ascend/driver/version.info 2>/dev/null || true
+cat /etc/ascend_install.info 2>/dev/null || true
+ls -l /dev/davinci* /dev/davinci_manager /dev/devmm_svm /dev/hisi_hdc 2>&1
+```
+
+2. 装驱动编译依赖
+
+```bash
+sudo apt-get update
+sudo apt-get install -y dkms gcc make linux-headers-$(uname -r) pciutils net-tools
+```
+
+如果 `linux-headers-$(uname -r)` 装不上，先停在这里。很多驱动修复失败就是当前内核没有对应 headers，要么换 apt 源，要么让管理员装匹配 headers，要么回到驱动支持的内核。
+
+3. 找或上传驱动/固件 `.run` 包
+
+先看看机器上有没有现成安装包：
+
+```bash
+sudo find /root /home /opt /usr/local -maxdepth 4 -type f \
+  \( -name '*npu-driver*.run' -o -name '*npu-firmware*.run' -o -name 'Ascend-hdk-*.run' \) \
+  2>/dev/null
+```
+
+你需要一对匹配当前机器型号、架构的包，名字大概像：
+
+```text
+Ascend-hdk-<chip_type>-npu-driver_<version>_linux-<arch>.run
+Ascend-hdk-<chip_type>-npu-firmware_<version>.run
+```
+
+4. 停掉占用 NPU 的容器/进程
+
+```bash
+docker ps
+docker stop $(docker ps -q) 2>/dev/null || true
+sudo fuser -v /dev/davinci* /dev/davinci_manager 2>/dev/null || true
+```
+
+5. 校验安装包
+
+假设包放在 `/root/ascend_fix`：
+
+```bash
+cd /root/ascend_fix
+chmod +x *.run
+
+./*npu-driver*.run --check
+./*npu-firmware*.run --check
+```
+
+6. 覆盖修复安装
+
+如果机器之前已经装过驱动/固件，现在是坏了要修复，按覆盖安装顺序：先固件，再驱动。
+
+```bash
+cd /root/ascend_fix
+
+sudo ./*npu-firmware*.run --full
+sudo ./*npu-driver*.run --full --install-for-all
+sudo reboot
+```
+
+如果这是全新安装或已经卸载干净，则一般是先驱动，再固件：
+
+```bash
+sudo ./*npu-driver*.run --full --install-for-all
+sudo ./*npu-firmware*.run --full
+sudo reboot
+```
+
+7. 重启后验证
+
+```bash
+npu-smi info
+ls -l /dev/davinci* /dev/davinci_manager /dev/devmm_svm /dev/hisi_hdc
+/usr/local/Ascend/driver/tools/upgrade-tool --device_index -1 --component -1 --version 2>/dev/null || true
+```
+
+如果 `npu-smi info` 还报 `dcmi module initialize failed`，马上看日志：
+
+```bash
+grep -RniE 'error|failed|dkms|kernel|firmware|davinci|dcmi' \
+  /var/log/ascend_seclog /var/log 2>/dev/null | tail -200
+
+dmesg -T | grep -Ei 'davinci|ascend|dcmi|npu|hisi' | tail -200
+```
+
+你现在最关键的问题是：有没有对应这台机器的 driver/firmware `.run` 包。如果没有，先不要乱卸载；先用 `uname -m`、机器型号、当前 `version.info` 去找匹配包，或者问机器管理员要原始安装包。
+
+官方文档里也写了这几个要点：Debian/Ubuntu 先装 `dkms gcc linux-headers-$(uname -r)`，初装顺序是驱动再固件，覆盖安装顺序是固件再驱动，最后用 `npu-smi info` 验证。参考：[NPU Driver and Firmware Installation](https://www.hiascend.com/document/detail/en/canncommercial/800/softwareinst/instg/instg_0005.html)。
+
+已同步到 `github_talk`。
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 重装/修复 Ascend 驱动 可以用apt/apt-get吗
 
 ===== assistant =====
