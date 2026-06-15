@@ -576,6 +576,9 @@ Acquire::https::Proxy "http://账号:密码@120.63.69.62:3130/";
 我会尽量减少后续可见状态，先补录刚才这句，再等 GitHub Pages 的 `transcript.txt` 返回新内容。
 
 ===== assistant =====
+这次补录也已经推了；我现在只做后台检查，不再发新的中间描述，避免继续制造要追加的可见文本。
+
+===== assistant =====
 已更新：我把这条之前的可见 user/assistant 对话都补进去了，并把首页改成直接加载 `transcript.txt`，这样原文文件是唯一来源，避免 HTML 转义造成改写。
 
 访问原文页面：
