@@ -590,3 +590,72 @@ Acquire::https::Proxy "http://账号:密码@120.63.69.62:3130/";
 ::git-stage{cwd="D:\lihanyang\github_talk"}
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
+systemctl show --property = Enviroment docker 显示了我的明文密码，我应该通过cntlm隐藏了啊，而且docker info | grep -i proxy 现实的就是xxx:xxx@120.63...正常，估计是我前面不小心泄露了明文密码。我怎么清情调systemctl show这里显示的密码？
+
+===== assistant =====
+对，`systemctl show -p Environment docker` 这里显示的是 Docker daemon 的 systemd 环境变量；如果里面还有 `账号:密码@120.63...`，说明 Docker 现在并没有真正通过 cntlm 隐藏，而是 systemd drop-in 里仍然写着明文代理。
+
+先找源头：
+
+```bash
+systemctl cat docker
+systemctl show docker -p Environment -p EnvironmentFiles -p DropInPaths
+sudo grep -RniE 'HTTP_PROXY|HTTPS_PROXY|NO_PROXY|120\.63|3130|3128' \
+  /etc/systemd/system/docker.service.d \
+  /etc/systemd/system/docker.service \
+  /lib/systemd/system/docker.service \
+  /usr/lib/systemd/system/docker.service \
+  /etc/default/docker \
+  /etc/sysconfig/docker \
+  /etc/docker 2>/dev/null
+```
+
+如果看到 `/etc/systemd/system/docker.service.d/http-proxy.conf` 之类文件里有明文密码，直接改成 cntlm 本地代理。比如 cntlm 监听在 `127.0.0.1:3128`：
+
+```bash
+sudo mkdir -p /etc/systemd/system/docker.service.d
+
+sudo tee /etc/systemd/system/docker.service.d/http-proxy.conf >/dev/null <<'EOF'
+[Service]
+Environment=
+Environment="HTTP_PROXY=http://127.0.0.1:3128"
+Environment="HTTPS_PROXY=http://127.0.0.1:3128"
+Environment="NO_PROXY=localhost,127.0.0.1,::1"
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+`Environment=` 这一行是故意的，用来清掉前面残留的 `Environment` 设置，避免旧的明文变量继续合并进来。
+
+然后检查：
+
+```bash
+systemctl show docker -p Environment
+docker info | grep -i proxy
+```
+
+期望看到的是：
+
+```text
+HTTP_PROXY=http://127.0.0.1:3128
+HTTPS_PROXY=http://127.0.0.1:3128
+```
+
+不应该再有 `账号:密码@...`。
+
+如果 `systemctl cat docker` 还能看到明文，说明明文还在某个 drop-in 文件里，必须编辑/删除那个文件本身，不要只靠覆盖：
+
+```bash
+sudo grep -Rni '你的明文密码' /etc/systemd/system/docker.service.d /etc/docker /etc/default/docker /etc/sysconfig/docker 2>/dev/null
+```
+
+最后，既然明文密码已经出现在命令输出或文件里，我建议把这个代理密码/域账号密码轮换掉；如果它曾经被提交到 GitHub 或贴到公开页面，单纯删除显示不够，要先改密码，再清 Git 历史。
+
+注意：Docker daemon 拉镜像用 cntlm 时可以用 `127.0.0.1:3128`；但容器内部的 `apt-get` 如果也要走宿主机 cntlm，`127.0.0.1` 会指向容器自己，通常要改用宿主机网桥地址，例如 `172.17.0.1:3128`，并确认 cntlm 监听和防火墙允许。
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
