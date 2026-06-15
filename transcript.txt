@@ -570,6 +570,12 @@ Acquire::https::Proxy "http://账号:密码@120.63.69.62:3130/";
 我会直接把 `transcript.txt` 重写成完整可见记录，再让首页从这个文本文件读取，避免同一份原文在 HTML 里被二次转义。完成后我只做一次提交和推送。
 
 ===== assistant =====
+推送已经完成，Pages 还在缓存旧内容；我会等它刷新到包含最早那条 Docker 对话后再结束，并把这条状态也补进 transcript 再推一次。
+
+===== assistant =====
+我会尽量减少后续可见状态，先补录刚才这句，再等 GitHub Pages 的 `transcript.txt` 返回新内容。
+
+===== assistant =====
 已更新：我把这条之前的可见 user/assistant 对话都补进去了，并把首页改成直接加载 `transcript.txt`，这样原文文件是唯一来源，避免 HTML 转义造成改写。
 
 访问原文页面：
