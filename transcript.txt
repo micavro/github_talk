@@ -438,6 +438,82 @@ Pages 已经通过 API 打开了，返回的发布地址是 `https://micavro.git
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+npu-smi info
+
+返回：
+DrvMngGetConsoleLogLevel failed. (ret=4)
+dcmi module initialize failed. ret is -8005
+
+===== assistant =====
+这个报错说明现在卡在 Ascend 驱动/DCMI 初始化层，不是 vLLM 镜像问题。先分清位置：
+
+- 如果在宿主机上跑 `npu-smi info` 都报这个，先别跑容器，必须先修宿主机驱动。
+- 如果宿主机正常、只有容器里报，再查 Docker 的设备挂载、权限或卡占用。
+
+宿主机先执行：
+
+```bash
+ls -l /dev/davinci* /dev/davinci_manager /dev/devmm_svm /dev/hisi_hdc 2>&1
+uname -r
+grep -iE 'kernel|driver|failed|error' /var/log/ascend_seclog/ascend_install.log 2>/dev/null | tail -80
+dmesg -T | grep -Ei 'davinci|ascend|dcmi|npu|hisi' | tail -120
+```
+
+如果 `/dev/davinci*` 这些设备节点没有，基本就是驱动没起来或驱动和当前内核不匹配。常见原因是系统内核被升级过，但 Ascend 驱动还是按旧内核编译的。处理方向是重装/修复 Ascend 驱动，让它针对当前 `uname -r` 的内核重新构建。
+
+再按官方 ret `-8005` 的思路查两个重点：
+
+```bash
+sudo /usr/local/Ascend/driver/tools/msnpureport
+```
+
+然后到生成目录里找：
+
+```bash
+grep -R "non-sec boot" ./hisi_logs 2>/dev/null
+```
+
+如果有 `non-sec boot`，可能是安全启动签名包和卡的 efuse 安全启动状态不匹配；这类一般需要换正确驱动包/固件包，得找机器管理员或昇腾安装包来源确认。
+
+如果是在容器里报、宿主机正常，再查是不是卡被别的容器占了：
+
+```bash
+docker ps
+docker ps -q | xargs -r docker inspect --format='{{.Name}} {{range .HostConfig.Devices}}{{.PathOnHost}} {{end}}'
+```
+
+然后先用最小方式进容器测：
+
+```bash
+docker run --rm -it \
+  --device /dev/davinci0 \
+  --device /dev/davinci_manager \
+  --device /dev/devmm_svm \
+  --device /dev/hisi_hdc \
+  -v /usr/local/dcmi:/usr/local/dcmi:ro \
+  -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro \
+  -v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/:ro \
+  -v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info:ro \
+  -v /etc/ascend_install.info:/etc/ascend_install.info:ro \
+  quay.io/ascend/vllm-ascend:v0.20.2rc1 bash
+```
+
+进去后：
+
+```bash
+npu-smi info
+```
+
+结论：你现在下一步不是设置 vLLM，而是先让宿主机的 `npu-smi info` 正常。只要宿主机都 `dcmi module initialize failed`，容器怎么挂载都大概率起不来。
+
+参考：昇腾官方故障案例也把 `dcmi module initialize failed, ret is -8005` 归到驱动/固件安装、内核匹配、容器卡占用等方向排查：[快速定位 npu-smi 报错 dcmi module initialize failed, ret is -8005](https://www.hiascend.com/document/caselibrary/detail/case_9289)。
+
+已同步到 `github_talk`。
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 docker image下载完成后，应该怎么设置？我记得我n卡驱动，npu-sim命令坏的好像也没安装。
 
 ===== assistant =====
