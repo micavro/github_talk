@@ -1,5 +1,5 @@
 # GitHub Talk
 
-This repository hosts a single static HTML page generated from a technical chat about vLLM Ascend Docker startup, proxy access, and CA certificate debugging.
+Exact visible transcript mirror for this Codex thread.
 
-Open `index.html` directly, or use GitHub Pages if it is enabled for this repository.
+Pages: https://micavro.github.io/github_talk/

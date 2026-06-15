@@ -1,35 +1,4 @@
-<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>github_talk transcript</title>
-  <style>
-    body {
-      margin: 0;
-      background: #f7f5ef;
-      color: #111827;
-      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-    }
-
-    main {
-      width: min(1100px, calc(100% - 32px));
-      margin: 0 auto;
-      padding: 24px 0 48px;
-    }
-
-    pre {
-      margin: 0;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      line-height: 1.65;
-      font-size: 15px;
-    }
-  </style>
-</head>
-<body>
-<main>
-<pre>===== user =====
+===== user =====
 之后所有对话，都需要一模一样双传到github_talk。注意一模一样，不要你总结什么的
 
 ===== assistant =====
@@ -39,7 +8,7 @@
 我会从你这条“之后所有对话……”开始建立原文记录。为了避免循环引用，我会把这次最终回复也按原文提前写入文件，然后推送后发出同一段文字；后续每轮也按这个办法做。
 
 ===== assistant =====
-我现在会把首页替换成一个极简的原文 `&lt;pre&gt;` 页面，并新增 `transcript.txt`。内容只保留消息原文和说话人分隔，不再把对话改写成文章。
+我现在会把首页替换成一个极简的原文 `<pre>` 页面，并新增 `transcript.txt`。内容只保留消息原文和说话人分隔，不再把对话改写成文章。
 
 ===== assistant =====
 页面和原文文件已经改好。接下来我只做校验、提交和推送；完成后我会发出已经预写进 transcript 的那段最终回复。
@@ -58,7 +27,3 @@
 ::git-stage{cwd="D:\lihanyang\github_talk"}
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
-</pre>
-</main>
-</body>
-</html>
