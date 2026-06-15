@@ -437,6 +437,102 @@ Pages 已经通过 API 打开了，返回的发布地址是 `https://micavro.git
 ::git-stage{cwd="D:\lihanyang\github_talk"}
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
+不对啊 我是通过办公室电脑连vpn，然后办公室电脑开cnmlt在3130端口，然后vpn小网通过ip:端口 来代理。
+办公室电脑vpn显示地址是120.63.76.132，办公室电脑开了ctnlm在3130端口。这下怎么设置公司服务器？
+
+===== assistant =====
+对，这种拓扑下，公司服务器应该指向“办公室电脑的 VPN 地址 + cntlm 端口”，不要写账号密码，也不要写 `127.0.0.1`：
+
+```text
+http://120.63.76.132:3130
+```
+
+先确认办公室电脑上的 cntlm 不是只监听本机：
+
+```bash
+ss -lntp | grep 3130
+```
+
+应该看到类似 `0.0.0.0:3130` 或 `120.63.76.132:3130`。如果是 `127.0.0.1:3130`，公司服务器连不到，需要把 cntlm 改成监听 VPN 地址，例如：
+
+```text
+Listen 120.63.76.132:3130
+```
+
+或者：
+
+```text
+Listen 0.0.0.0:3130
+```
+
+同时在办公室电脑防火墙里只放行公司服务器/VPN 小网访问 `3130`，不要把它变成开放代理。
+
+然后在公司服务器上先测试能不能连到办公室电脑的 cntlm：
+
+```bash
+nc -vz 120.63.76.132 3130
+curl -v -x http://120.63.76.132:3130 https://quay.io/v2/
+```
+
+如果这里 `no route to host` 或 timeout，那是 VPN 路由/防火墙/客户端隔离问题，Docker 怎么配都不会好。要先让公司服务器能访问 `120.63.76.132:3130`。
+
+Docker daemon 这样配：
+
+```bash
+sudo mkdir -p /etc/systemd/system/docker.service.d
+
+sudo tee /etc/systemd/system/docker.service.d/http-proxy.conf >/dev/null <<'EOF'
+[Service]
+Environment=
+Environment="HTTP_PROXY=http://120.63.76.132:3130"
+Environment="HTTPS_PROXY=http://120.63.76.132:3130"
+Environment="NO_PROXY=localhost,127.0.0.1,::1"
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+检查时应该只看到 `120.63.76.132:3130`，不应该有明文密码：
+
+```bash
+systemctl show docker -p Environment
+docker info | grep -i proxy
+```
+
+再拉镜像：
+
+```bash
+docker pull quay.io/ascend/vllm-ascend:v0.20.2rc1
+```
+
+如果是公司服务器宿主机的 `apt-get` 也要走这个代理：
+
+```bash
+sudo tee /etc/apt/apt.conf.d/95proxies >/dev/null <<'EOF'
+Acquire::http::Proxy "http://120.63.76.132:3130/";
+Acquire::https::Proxy "http://120.63.76.132:3130/";
+EOF
+
+sudo apt-get update
+```
+
+如果是容器里面的 `apt-get` 要走这个代理，`docker run` 里加：
+
+```bash
+-e HTTP_PROXY=http://120.63.76.132:3130 \
+-e HTTPS_PROXY=http://120.63.76.132:3130 \
+-e NO_PROXY=localhost,127.0.0.1,::1 \
+```
+
+关键判断：`cntlm` 在办公室电脑上，所以公司服务器统一写 `120.63.76.132:3130`；只有 cntlm 装在公司服务器本机时，才写 `127.0.0.1:3128/3130`。
+
+已同步到 `github_talk`。
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 
 ===== user =====
 sudo apt-get failed:
