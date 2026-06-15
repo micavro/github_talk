@@ -438,6 +438,89 @@ Pages 已经通过 API 打开了，返回的发布地址是 `https://micavro.git
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+我docker pull quay.io/ascend跑成功了，现在在下载，是不是就可以了，以后直接用本地镜像。 apt相关我该怎么更新？
+
+===== user =====
+我docker pull quay.io/ascend跑成功了，现在在下载，是不是就可以了，以后直接用本地镜像。 apt相关我该怎么更新？
+
+===== assistant =====
+是的，`docker pull` 下载完成后，这个 tag 就在公司服务器本地了。以后 `docker run ... quay.io/ascend/vllm-ascend:v0.20.2rc1` 默认会直接用本地镜像，不会每次重新拉。想强制只用本地镜像，可以加：
+
+```bash
+docker run --pull=never ...
+```
+
+先确认镜像已经在本地：
+
+```bash
+docker image ls | grep vllm-ascend
+docker image inspect quay.io/ascend/vllm-ascend:v0.20.2rc1 >/dev/null && echo ok
+```
+
+`apt` 要分两种场景。
+
+如果是公司服务器宿主机上的 `apt-get update`，把 apt 的代理改成办公室 Windows 的 cntlm：
+
+```bash
+sudo grep -RniE 'proxy|120\.63|3128|3130' /etc/apt/apt.conf /etc/apt/apt.conf.d 2>/dev/null
+
+sudo tee /etc/apt/apt.conf.d/95proxies >/dev/null <<'EOF'
+Acquire::http::Proxy "http://120.63.76.132:3130/";
+Acquire::https::Proxy "http://120.63.76.132:3130/";
+EOF
+
+sudo apt-get update
+```
+
+如果之前有错误的 `120.63.222.89:3128`，在上面 grep 出来的文件里删掉或覆盖掉。确认最终配置：
+
+```bash
+apt-config dump | grep -i proxy
+```
+
+如果是容器里面要 `apt-get update && apt-get install curl`，Docker daemon 的代理不会自动传进容器，要在 `docker run` 加环境变量：
+
+```bash
+-e HTTP_PROXY=http://120.63.76.132:3130 \
+-e HTTPS_PROXY=http://120.63.76.132:3130 \
+-e http_proxy=http://120.63.76.132:3130 \
+-e https_proxy=http://120.63.76.132:3130 \
+-e NO_PROXY=localhost,127.0.0.1,::1 \
+```
+
+也就是你的 `docker run` 里加这几行，然后进容器后：
+
+```bash
+apt-get update -y
+apt-get install -y curl
+```
+
+如果容器里 apt 仍然不走环境变量，可以在容器内临时写 apt 配置：
+
+```bash
+cat >/etc/apt/apt.conf.d/95proxies <<'EOF'
+Acquire::http::Proxy "http://120.63.76.132:3130/";
+Acquire::https::Proxy "http://120.63.76.132:3130/";
+EOF
+
+apt-get update -y
+```
+
+最小判断链路是：
+
+```bash
+curl -I -x http://120.63.76.132:3130 http://archive.ubuntu.com/
+curl -I -x http://120.63.76.132:3130 https://quay.io/v2/
+```
+
+一句话：Docker 拉镜像已经好了；apt 需要单独配代理，宿主机配 `/etc/apt/apt.conf.d/95proxies`，容器内则通过 `docker run -e ...` 或容器内 apt 配置走 `120.63.76.132:3130`。
+
+已同步到 `github_talk`。
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 办公室电脑是windows。网站没更新？
 
 ===== assistant =====
