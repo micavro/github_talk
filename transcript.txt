@@ -438,6 +438,84 @@ Pages 已经通过 API 打开了，返回的发布地址是 `https://micavro.git
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+重装/修复 Ascend 驱动 可以用apt/apt-get吗
+
+===== assistant =====
+可以用 `apt/apt-get`，但主要是用来装“驱动编译依赖”，不是直接 `apt-get install ascend-driver` 这种方式修驱动主体。Ascend NPU 驱动/固件通常按官方 `.run` 包安装或覆盖安装。
+
+先在宿主机装依赖：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y dkms gcc make linux-headers-$(uname -r) pciutils net-tools
+```
+
+其中官方文档明确提到 Debian/Ubuntu 系需要 `dkms gcc linux-headers-$(uname -r)` 这些依赖；`pciutils/net-tools` 是为了补 `lspci/ifconfig` 这类安装脚本常用工具。
+
+然后确认机器架构和当前驱动状态：
+
+```bash
+uname -m
+cat /etc/os-release
+cat /usr/local/Ascend/driver/version.info 2>/dev/null
+cat /etc/ascend_install.info 2>/dev/null
+```
+
+接着拿到和你的卡、系统、架构匹配的驱动包和固件包，例如类似：
+
+```text
+Ascend-hdk-<chip_type>-npu-driver_<version>_linux-<arch>.run
+Ascend-hdk-<chip_type>-npu-firmware_<version>.run
+```
+
+如果是“首次安装/已经卸载干净”，顺序一般是驱动 > 固件：
+
+```bash
+chmod +x Ascend-hdk-*-npu-driver_*.run Ascend-hdk-*-npu-firmware_*.run
+
+./Ascend-hdk-*-npu-driver_*.run --check
+./Ascend-hdk-*-npu-firmware_*.run --check
+
+sudo ./Ascend-hdk-*-npu-driver_*.run --full --install-for-all
+sudo ./Ascend-hdk-*-npu-firmware_*.run --full
+sudo reboot
+```
+
+如果是“已经装过但现在坏了，要覆盖/修复”，官方说明覆盖安装场景是固件 > 驱动。也就是：
+
+```bash
+sudo ./Ascend-hdk-*-npu-firmware_*.run --full
+sudo ./Ascend-hdk-*-npu-driver_*.run --full --install-for-all
+sudo reboot
+```
+
+重启后验证：
+
+```bash
+npu-smi info
+ls -l /dev/davinci* /dev/davinci_manager /dev/devmm_svm /dev/hisi_hdc
+```
+
+如果安装时报设备被占用，先停容器和占用进程：
+
+```bash
+docker ps
+docker stop $(docker ps -q) 2>/dev/null || true
+sudo fuser -v /dev/davinci* /dev/davinci_manager 2>/dev/null
+```
+
+一句话：`apt-get` 负责把 `dkms/gcc/kernel headers` 这些依赖装好；Ascend 驱动/固件本体还是用官方 `.run` 包修复/覆盖安装。你现在这个 `dcmi module initialize failed`，优先按宿主机驱动修复，不要在 vLLM 容器里修。
+
+参考官方文档：
+[NPU Driver and Firmware Installation](https://www.hiascend.com/document/detail/en/canncommercial/800/softwareinst/instg/instg_0005.html)
+[安装NPU驱动固件](https://www.hiascend.com/document/detail/zh/canncommercial/80RC3/softwareinst/instg/instg_0004.html)
+
+已同步到 `github_talk`。
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 npu-smi info
 
 返回：
