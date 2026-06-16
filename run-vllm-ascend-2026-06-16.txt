@@ -165,3 +165,112 @@ vllm serve /root/.cache/你的本地模型目录 \
 ::git-stage{cwd="D:\lihanyang\github_talk"}
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
+我不要一串命令，你一步步告诉我怎么做
+
+===== assistant =====
+好，我们按“每一步做完再看下一步”的方式来。你现在先别急着跑 `vllm serve`。
+
+第 1 步：在宿主机确认有几张卡。
+
+```bash
+npu-smi info
+ls /dev/davinci[0-9]*
+```
+
+你要看的是卡号，比如 `/dev/davinci0` 到 `/dev/davinci7` 就是 8 张，之后 `tensor-parallel-size` 最多可以设 8。
+
+第 2 步：先只启动容器，不跑模型。
+
+如果你是 8 张卡，用这个版本。它会把 0-7 全部挂进去：
+
+```bash
+docker run --rm -it \
+  --name vllm-ascend \
+  --pull=never \
+  --net=host \
+  --shm-size=16g \
+  --device /dev/davinci0 \
+  --device /dev/davinci1 \
+  --device /dev/davinci2 \
+  --device /dev/davinci3 \
+  --device /dev/davinci4 \
+  --device /dev/davinci5 \
+  --device /dev/davinci6 \
+  --device /dev/davinci7 \
+  --device /dev/davinci_manager \
+  --device /dev/devmm_svm \
+  --device /dev/hisi_hdc \
+  -v /usr/local/dcmi:/usr/local/dcmi:ro \
+  -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro \
+  -v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/:ro \
+  -v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info:ro \
+  -v /etc/ascend_install.info:/etc/ascend_install.info:ro \
+  -v /root/.cache:/root/.cache \
+  -v ~/lhy/vllm-ascend0616:/root/lhy/vllm-ascend0616 \
+  -w /root/lhy/vllm-ascend0616 \
+  -p 8000:8000 \
+  quay.io/ascend/vllm-ascend:v0.20.2rc1 bash
+```
+
+如果你不是 8 张卡，就先告诉我 `ls /dev/davinci[0-9]*` 的输出，我帮你改这一段。
+
+第 3 步：进容器后确认挂载成功。
+
+在容器里执行：
+
+```bash
+npu-smi info
+ls /dev/davinci[0-9]*
+python -c "import vllm; print(vllm.__version__)"
+```
+
+这三条都正常，才进入下一步。
+
+第 4 步：先用 1 张卡跑最小模型。
+
+先不要所有卡一起上。先验证链路：
+
+```bash
+export ASCEND_RT_VISIBLE_DEVICES=0
+export VLLM_USE_MODELSCOPE=True
+
+vllm serve Qwen/Qwen3-0.6B \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --served-model-name qwen3-0.6b \
+  --tensor-parallel-size 1
+```
+
+第 5 步：宿主机另开一个终端测试服务。
+
+```bash
+curl http://127.0.0.1:8000/v1/models
+```
+
+能返回模型列表，就说明 vLLM 服务跑起来了。
+
+第 6 步：再考虑多卡。
+
+如果你要用 8 张卡，把容器里的启动改成：
+
+```bash
+export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+```
+
+然后 `vllm serve` 里改：
+
+```bash
+--tensor-parallel-size 8
+```
+
+关键点：Docker 挂载全部卡，只是让容器“看得到”全部卡；vLLM 真正用几张卡，是由 `ASCEND_RT_VISIBLE_DEVICES` 和 `--tensor-parallel-size` 决定的。
+
+你现在先做第 1 步和第 2 步。第 3 步里如果 `npu-smi info` 在容器内也正常，我们再继续跑模型。
+
+已同步到独立 transcript：
+[https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html](https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html)
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
