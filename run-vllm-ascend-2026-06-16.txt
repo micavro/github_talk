@@ -166,6 +166,150 @@ vllm serve /root/.cache/你的本地模型目录 \
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+我现在下载完了。~/vllm/ascend0616下有文件夹Meta-Llama-3.1-8B-Instruct文件夹和/mfe-ascend文件夹。接下来该怎么做
+
+===== assistant =====
+我会把这一轮追加到独立 transcript。接下来我会按你现在的目录结构讲：`~/vllm/ascend0616` 整体挂进容器，模型路径用 `/workspace/Meta-Llama-3.1-8B-Instruct`，MFE 项目路径用 `/workspace/mfe-ascend`。
+
+===== assistant =====
+我已经把这轮内容写入独立 transcript 文件。现在提交推送，然后我把相同步骤发给你。
+
+===== assistant =====
+很好，现在路径已经清楚了。你接下来按这几个步骤做。
+
+第 1 步：在宿主机确认目录没问题。
+
+```bash
+ls ~/vllm/ascend0616
+ls ~/vllm/ascend0616/Meta-Llama-3.1-8B-Instruct
+ls ~/vllm/ascend0616/mfe-ascend
+```
+
+你应该能看到两个目录：
+
+```text
+Meta-Llama-3.1-8B-Instruct
+mfe-ascend
+```
+
+第 2 步：启动容器时，把整个目录挂进去。
+
+你之前那条能进容器的 `docker run` 其他设备挂载都保留，只把工作目录挂载改成这两项：
+
+```bash
+-v ~/vllm/ascend0616:/workspace \
+-w /workspace \
+```
+
+也就是说，宿主机：
+
+```bash
+~/vllm/ascend0616/Meta-Llama-3.1-8B-Instruct
+~/vllm/ascend0616/mfe-ascend
+```
+
+进容器后会变成：
+
+```bash
+/workspace/Meta-Llama-3.1-8B-Instruct
+/workspace/mfe-ascend
+```
+
+注意：已经启动的容器不能临时新增挂载。如果现在容器里看不到这些目录，就退出容器，重新 `docker run`。
+
+第 3 步：进容器后检查。
+
+```bash
+cd /workspace
+ls
+npu-smi info
+python -c "import vllm; print(vllm.__version__)"
+```
+
+如果这三条正常，再继续。
+
+第 4 步：先启动 vLLM，不要先动 MFE。
+
+先用 1 张卡验证模型能跑：
+
+```bash
+export ASCEND_RT_VISIBLE_DEVICES=0
+
+vllm serve /workspace/Meta-Llama-3.1-8B-Instruct \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --served-model-name llama-3.1-8b-instruct \
+  --tensor-parallel-size 1 \
+  --gpu-memory-utilization 0.9 \
+  --trust-remote-code
+```
+
+这个窗口不要关。它就是 vLLM 服务。
+
+第 5 步：另开一个终端测试 vLLM。
+
+在宿主机上执行：
+
+```bash
+curl http://127.0.0.1:8000/v1/models
+```
+
+如果能看到 `llama-3.1-8b-instruct`，再测试聊天接口：
+
+```bash
+curl http://127.0.0.1:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llama-3.1-8b-instruct",
+    "messages": [{"role": "user", "content": "你好"}],
+    "max_tokens": 64,
+    "temperature": 0
+  }'
+```
+
+这一步通了，说明 vLLM 已经可以作为 OpenAI-compatible API 用。
+
+第 6 步：再接 MFE。
+
+进入 MFE 项目：
+
+```bash
+cd /workspace/mfe-ascend
+ls
+```
+
+然后先找它的模型/API 配置项：
+
+```bash
+grep -RniE "OPENAI|BASE_URL|API_BASE|MODEL|LLM|VLLM|chat/completions" . | head -80
+```
+
+你要把 MFE 的后端地址指到：
+
+```text
+http://127.0.0.1:8000/v1
+```
+
+常见环境变量可以先这样设：
+
+```bash
+export OPENAI_BASE_URL=http://127.0.0.1:8000/v1
+export OPENAI_API_BASE=http://127.0.0.1:8000/v1
+export OPENAI_API_KEY=EMPTY
+export MODEL_NAME=llama-3.1-8b-instruct
+```
+
+然后再按 `mfe-ascend` 项目的 README 或启动脚本启动它。
+
+顺序不要乱：先确认容器能看到模型和 MFE 目录，再启动 vLLM，再用 curl 测通，最后再接 MFE。
+
+已同步到独立 transcript：
+[https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html](https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html)
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 docker内部，temporary failure resolving 'ports.ubuntu.com'
 
 ===== assistant =====
