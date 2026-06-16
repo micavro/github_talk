@@ -166,6 +166,79 @@ vllm serve /root/.cache/你的本地模型目录 \
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+我的docker里面好像没有安装python包 它提示我unable to find usable engine: tried using :"pyarrow", "fastparquet"
+
+===== assistant =====
+这个报错不是 vLLM 本身，是 MFE 读取 `gsm8k.parquet` 时 pandas 找不到 Parquet 引擎。我要看一下 MFE 的数据读取代码，然后把这轮追加到独立 transcript 并给你最短修法。
+
+===== assistant =====
+我看了代码，确实是 [scripts/process_datasets.py](D:\lihanyang\mfe\scripts\process_datasets.py) 里 `pd.read_parquet(...)` 触发的；`pyproject.toml` 装了 pandas，但没显式装 `pyarrow/fastparquet`。修法就是在容器里补一个 Parquet 引擎，优先 `pyarrow`。
+
+===== assistant =====
+我已经把这轮内容追加到独立 transcript。现在提交推送，然后给你同一份简化步骤。
+
+===== assistant =====
+对，这个错误就是缺 Parquet 读取引擎。MFE 里用的是：
+
+```python
+pd.read_parquet(...)
+```
+
+pandas 读 parquet 必须有 `pyarrow` 或 `fastparquet`，你的容器里两个都没有。
+
+第 1 步：在容器里安装 `pyarrow`。
+
+```bash
+python -m pip install pyarrow
+```
+
+如果容器 pip 也要走代理，用：
+
+```bash
+export HTTP_PROXY=http://120.63.76.132:3130
+export HTTPS_PROXY=http://120.63.76.132:3130
+export http_proxy=http://120.63.76.132:3130
+export https_proxy=http://120.63.76.132:3130
+
+python -m pip install pyarrow
+```
+
+第 2 步：验证安装成功。
+
+```bash
+python -c "import pyarrow, pandas as pd; print('pyarrow', pyarrow.__version__)"
+```
+
+第 3 步：回到 MFE 目录重新跑。
+
+```bash
+cd /root/lhy/vllm-ascend0616/mfe-ascend
+python scripts/client.py --dataset gsm8k -n 1 --yaml adv_reason_3.yaml -v
+```
+
+注意：现在不要直接跑：
+
+```bash
+pip install -e .
+```
+
+因为你的 `pyproject.toml` 里写了 `vllm==0.9.0`，有可能把 vllm-ascend 镜像里已经配好的 vLLM 环境覆盖掉。先只补缺的包，比如 `pyarrow`。
+
+如果后面又缺别的包，再一个个补。比如提示缺 `yaml`，再装：
+
+```bash
+python -m pip install pyyaml
+```
+
+一句话：这一步只修 pandas 读 parquet，装 `pyarrow` 就够。
+
+已同步到独立 transcript：
+[https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html](https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html)
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 直接ls会出现两个文件夹，但是没有workspace这个名字的文件夹，是 root@3ba181d7b42c: ~/lhy/vllm-ascend0616# ls 的，没有workspace只有两个文件夹
 
 ===== assistant =====
