@@ -1,0 +1,167 @@
+===== user =====
+新开一个transcript（网站上页面独立）
+
+现在我docker下载完了，驱动已经正常了，我想正确挂在vllm、把设备（卡）全部挂载上，然后跑vllm，该怎么做？
+
+===== assistant =====
+我会新建一个独立 transcript 页面，不覆盖旧的主 transcript；这轮的用户原文和我的最终答复会写到新文件里并推送。然后我会给你一套按“宿主机驱动已正常、镜像已下载”的 vLLM Ascend 启动命令。
+
+===== assistant =====
+我会按官方 vllm-ascend Docker 文档核对命令：A2 是 `/dev/davinci0-7`，A3 是 `/dev/davinci0-15`，并挂载 `dcmi`、`hccn_tool`、`npu-smi`、driver lib 和 cache。现在我把独立页面文件建好再推送。
+
+===== assistant =====
+我会把独立页命名成 `run-vllm-ascend-2026-06-16.html`，原文文件是 `run-vllm-ascend-2026-06-16.txt`，这样旧 transcript 仍然保留，新页面可以单独访问。
+
+===== assistant =====
+独立 transcript 和页面已经写好，接下来我只提交这三个文件：新 HTML、新 TXT、README 的入口链接。
+
+===== assistant =====
+我刚刚多发了一句状态，也按你的要求补进独立 transcript 里，然后再提交推送。
+
+===== assistant =====
+可以。现在你已经满足两个前提：镜像已下载、宿主机 `npu-smi info` 正常。下一步分成三件事：启动容器时把所有 NPU 设备和驱动目录挂进去；进容器确认 vLLM 能识别 Ascend；再用 `vllm serve` 起 OpenAI API 服务。
+
+我给你一版自动挂载所有 `/dev/davinci*` 的启动脚本，先用这个最稳：
+
+```bash
+mkdir -p ~/lhy/vllm-ascend0616
+cd ~/lhy/vllm-ascend0616
+
+cat > run_container.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+export IMAGE="${IMAGE:-quay.io/ascend/vllm-ascend:v0.20.2rc1}"
+export PROXY="${PROXY:-http://120.63.76.132:3130}"
+export WORKDIR="${WORKDIR:-$HOME/lhy/vllm-ascend0616}"
+mkdir -p "$WORKDIR" "$HOME/.cache"
+
+DEV_ARGS=()
+for d in /dev/davinci[0-9]*; do
+  [ -e "$d" ] && DEV_ARGS+=(--device "$d")
+done
+for d in /dev/davinci_manager /dev/devmm_svm /dev/hisi_hdc; do
+  [ -e "$d" ] && DEV_ARGS+=(--device "$d")
+done
+
+MOUNT_ARGS=()
+[ -e /usr/local/dcmi ] && MOUNT_ARGS+=(-v /usr/local/dcmi:/usr/local/dcmi:ro)
+[ -e /usr/local/Ascend/driver/tools/hccn_tool ] && MOUNT_ARGS+=(-v /usr/local/Ascend/driver/tools/hccn_tool:/usr/local/Ascend/driver/tools/hccn_tool:ro)
+[ -e /usr/local/Ascend/driver/lib64 ] && MOUNT_ARGS+=(-v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/:ro)
+[ -e /usr/local/Ascend/driver/version.info ] && MOUNT_ARGS+=(-v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info:ro)
+[ -e /etc/ascend_install.info ] && MOUNT_ARGS+=(-v /etc/ascend_install.info:/etc/ascend_install.info:ro)
+
+NPU_SMI="$(command -v npu-smi || true)"
+[ -n "$NPU_SMI" ] && MOUNT_ARGS+=(-v "$NPU_SMI:/usr/local/bin/npu-smi:ro")
+
+docker run --rm -it \
+  --name vllm-ascend \
+  --pull=never \
+  --net=host \
+  --shm-size=1g \
+  "${DEV_ARGS[@]}" \
+  "${MOUNT_ARGS[@]}" \
+  -v "$HOME/.cache:/root/.cache" \
+  -v "$WORKDIR:/root/lhy/vllm-ascend0616" \
+  -w /root/lhy/vllm-ascend0616 \
+  -e HTTP_PROXY="$PROXY" \
+  -e HTTPS_PROXY="$PROXY" \
+  -e http_proxy="$PROXY" \
+  -e https_proxy="$PROXY" \
+  -e NO_PROXY=localhost,127.0.0.1,::1 \
+  -e no_proxy=localhost,127.0.0.1,::1 \
+  "$IMAGE" bash
+EOF
+
+chmod +x run_container.sh
+./run_container.sh
+```
+
+进容器后先做三步检查：
+
+```bash
+npu-smi info
+python - <<'PY'
+import vllm
+print("vllm", vllm.__version__)
+try:
+    import vllm_ascend
+    print("vllm_ascend ok")
+except Exception as e:
+    print("vllm_ascend import check:", repr(e))
+PY
+ls /dev/davinci*
+```
+
+如果这些 OK，先跑一个最小 OpenAI API 服务：
+
+```bash
+export VLLM_USE_MODELSCOPE=True
+
+vllm serve Qwen/Qwen3-0.6B \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --served-model-name qwen3-0.6b \
+  --tensor-parallel-size 1
+```
+
+另开一个终端，在宿主机测：
+
+```bash
+curl http://127.0.0.1:8000/v1/models | python3 -m json.tool
+
+curl http://127.0.0.1:8000/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen3-0.6b",
+    "prompt": "Beijing is a",
+    "max_tokens": 16,
+    "temperature": 0
+  }' | python3 -m json.tool
+```
+
+注意：“把所有卡挂载进容器”和“vLLM 实际使用所有卡”是两件事。上面的 Docker 脚本会把所有 `/dev/davinci*` 挂进去；但 vLLM 是否用多卡取决于 `--tensor-parallel-size` 和可见卡列表。比如 8 张 A2 卡全部用于一个模型：
+
+```bash
+export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+vllm serve /root/.cache/你的本地模型目录 \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --served-model-name my-model \
+  --tensor-parallel-size 8 \
+  --gpu-memory-utilization 0.9 \
+  --trust-remote-code
+```
+
+如果是 16 张 A3：
+
+```bash
+export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+
+vllm serve /root/.cache/你的本地模型目录 \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --served-model-name my-model \
+  --tensor-parallel-size 16 \
+  --gpu-memory-utilization 0.9 \
+  --trust-remote-code
+```
+
+小模型先别一上来用所有卡，先 `--tensor-parallel-size 1` 确认链路通；大模型再把 TP 调到卡数。官方文档也是先用 `Qwen/Qwen3-0.6B` 做 quickstart，再用 `vllm serve` 暴露 OpenAI API。
+
+独立 transcript 页面：
+[https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html](https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html)
+
+原文文件：
+[https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.txt](https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.txt)
+
+参考：
+[vllm-ascend Installation](https://docs.vllm.ai/projects/ascend/en/latest/installation.html)
+[vllm-ascend Quickstart](https://docs.vllm.ai/projects/ascend/en/latest/quick_start.html)
+
+已同步到 `github_talk`。
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}

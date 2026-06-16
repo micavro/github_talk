@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>run vllm ascend transcript</title>
+  <style>
+    body {
+      margin: 0;
+      background: #f7f5ef;
+      color: #111827;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    }
+
+    main {
+      width: min(1100px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 48px;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.65;
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <pre id="transcript">Loading transcript...</pre>
+  </main>
+  <script>
+    fetch("run-vllm-ascend-2026-06-16.txt?v=" + Date.now(), { cache: "no-store" })
+      .then(function (response) {
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        return response.text();
+      })
+      .then(function (text) {
+        document.getElementById("transcript").textContent = text;
+      })
+      .catch(function (error) {
+        document.getElementById("transcript").textContent =
+          "Failed to load transcript: " + error.message;
+      });
+  </script>
+</body>
+</html>
