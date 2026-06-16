@@ -166,6 +166,68 @@ vllm serve /root/.cache/你的本地模型目录 \
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+Mem 1.47T 可以开多少。我想跑Llamda-3.1-8B模型，建议开多少
+
+===== assistant =====
+我会把这轮追加到同一个独立 vLLM transcript，然后给你一个很明确的建议值：`Llama-3.1-8B` 先用 `32g`，想更稳可以 `64g`，不用按 1.47T 成比例开。
+
+===== assistant =====
+内容已写入独立 transcript 文件。现在我只提交并推送，然后把同一份建议发给你。
+
+===== assistant =====
+你宿主机内存 `1.47T` 很宽裕，但 `--shm-size` 不需要按总内存比例开。它只是容器的共享内存，不是模型权重内存，也不是 NPU 显存。
+
+跑 `Llama-3.1-8B`，我的建议是：
+
+```bash
+--shm-size=32g
+```
+
+如果你打算长期给 MFE 系统当服务用，或者后面会多卡、并发请求、batch 稍微大一点，可以直接开：
+
+```bash
+--shm-size=64g
+```
+
+你有 `1.47T` 内存，开 `64g` 完全没问题；但没必要一上来开 `256g`、`512g`，通常用不上。
+
+推荐策略：
+
+```text
+单卡测试 Llama-3.1-8B：32g
+多卡/长期服务/并发访问：64g
+只有遇到 Bus error、worker died、shared memory 相关报错：再加到 128g
+```
+
+所以你的 Docker 启动里我建议先改成：
+
+```bash
+--shm-size=64g
+```
+
+另一个更关键的点：`Llama-3.1-8B` 真正吃的是 NPU 显存，不是这个 `Mem 1.47T`。如果你跑的是 `Llama-3.1-8B-Instruct`，先用 1 张卡验证：
+
+```bash
+export ASCEND_RT_VISIBLE_DEVICES=0
+```
+
+然后 `vllm serve` 里先：
+
+```bash
+--tensor-parallel-size 1
+```
+
+单卡跑通之后，再考虑多卡。8B 模型通常没必要一上来用 8 张卡，除非你追求吞吐或单卡显存不够。
+
+还有个小拼写：应该是 `Llama-3.1-8B`，不是 `Llamda-3.1-8B`。
+
+已同步到独立 transcript：
+[https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html](https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html)
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 --shm-size是什么参数？
 
 ===== assistant =====
