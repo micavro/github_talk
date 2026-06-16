@@ -166,6 +166,112 @@ vllm serve /root/.cache/你的本地模型目录 \
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+直接ls会出现两个文件夹，但是没有workspace这个名字的文件夹，是 root@3ba181d7b42c: ~/lhy/vllm-ascend0616# ls 的，没有workspace只有两个文件夹
+
+===== assistant =====
+没问题，这说明你容器启动时挂载点不是 `/workspace`，而是 `/root/lhy/vllm-ascend0616`。我会把这轮追加到独立 transcript，然后把后续步骤全部改成你当前实际路径。
+
+===== assistant =====
+从代码角度看，你现在这个位置反而是可以用的；前面我说 `/workspace` 只是另一种挂载点命名，不是必须。关键是让 MFE 的包名和模板里的模型相对路径对上。
+
+===== assistant =====
+我已把这轮实际路径说明写进独立 transcript。现在提交推送，然后把相同步骤发给你。
+
+===== assistant =====
+没问题，不需要有 `/workspace`。你现在的工作目录就是：
+
+```bash
+/root/lhy/vllm-ascend0616
+```
+
+后面全部用这个路径就行。
+
+第 1 步：先确认现在这两个文件夹名字。
+
+在容器里执行：
+
+```bash
+pwd
+ls
+```
+
+你应该看到类似：
+
+```text
+Meta-Llama-3.1-8B-Instruct
+mfe-ascend
+```
+
+第 2 步：在当前目录创建两个软链接。
+
+MFE 代码里 import 的包名是 `mfe`，但你的目录叫 `mfe-ascend`；模板里模型路径写的是 `../models/Llama-3.1-8B-Instruct/`，但你的模型目录叫 `Meta-Llama-3.1-8B-Instruct`。所以做两个链接：
+
+```bash
+cd /root/lhy/vllm-ascend0616
+
+ln -sfn mfe-ascend mfe
+
+mkdir -p models
+ln -sfn ../Meta-Llama-3.1-8B-Instruct models/Llama-3.1-8B-Instruct
+```
+
+第 3 步：确认链接正确。
+
+```bash
+ls -l mfe
+ls -l models/Llama-3.1-8B-Instruct
+ls models/Llama-3.1-8B-Instruct
+```
+
+第三条能列出模型文件就对了。
+
+第 4 步：进入 MFE 项目，不要手动启动 `vllm serve`。
+
+```bash
+cd /root/lhy/vllm-ascend0616/mfe-ascend
+```
+
+先检查 Python 能不能 import：
+
+```bash
+python -c "import mfe; print(mfe.__file__)"
+python -c "import vllm; print(vllm.__version__)"
+```
+
+第 5 步：先只用 1 张卡跑 MFE。
+
+```bash
+export CUDA_VISIBLE_DEVICES=0
+export ASCEND_RT_VISIBLE_DEVICES=0
+export MFE_VERBOSE=1
+export MFE_VLLM_LOG_LEVEL=INFO
+```
+
+然后启动 MFE 测试：
+
+```bash
+python scripts/client.py --dataset gsm8k -n 1 --yaml adv_reason_3.yaml -v
+```
+
+这一步才会由 MFE 自己创建 vLLM 引擎。你不需要提前开 `vllm serve`，也不需要先开 8000 端口。
+
+如果报 `gsm8k.parquet` 不存在，说明数据集还没准备好；如果报模型路径不存在，就把下面输出发我：
+
+```bash
+pwd
+ls
+ls ../models/Llama-3.1-8B-Instruct
+```
+
+如果开始加载模型，那方向就是对的。
+
+已同步到独立 transcript：
+[https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html](https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html)
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 我容器已经启动了应该
 
 ===== assistant =====
