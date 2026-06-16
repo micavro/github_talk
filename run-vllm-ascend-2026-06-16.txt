@@ -166,6 +166,73 @@ vllm serve /root/.cache/你的本地模型目录 \
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+error = Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with ... and the maximum length is 96 : '${MFE_MODEL_PATH}'.
+
+===== assistant =====
+这个错误说明：MFE 把字符串 `${MFE_MODEL_PATH}` 原样传给了 vLLM/Transformers。它没有被展开成真实路径，所以 HuggingFace 把它当成 repo id 校验，然后报错。
+
+也就是说，光写：
+
+```bash
+export MFE_MODEL_PATH=/root/lhy/vllm-ascend0616/Meta-Llama-3.1-8B-Instruct
+```
+
+还不够，因为现在的 MFE 代码没有自动展开 YAML 里的 `${MFE_MODEL_PATH}`。
+
+先用最简单办法：把 YAML 里的 `${MFE_MODEL_PATH}` 改成真实绝对路径。
+
+第 1 步：在容器里进入 MFE 目录。
+
+```bash
+cd /root/lhy/vllm-ascend0616/mfe-ascend
+```
+
+第 2 步：找是哪几个 YAML 写了 `${MFE_MODEL_PATH}`。
+
+```bash
+grep -Rni '\${MFE_MODEL_PATH}' templates
+```
+
+第 3 步：直接替换成真实模型目录。
+
+```bash
+sed -i 's#${MFE_MODEL_PATH}#/root/lhy/vllm-ascend0616/Meta-Llama-3.1-8B-Instruct#g' templates/*.yaml
+```
+
+第 4 步：确认已经没有 `${MFE_MODEL_PATH}`。
+
+```bash
+grep -Rni '\${MFE_MODEL_PATH}' templates || echo ok
+grep -Rni 'model:' templates/adv_reason_3.yaml
+```
+
+你应该看到类似：
+
+```yaml
+model: /root/lhy/vllm-ascend0616/Meta-Llama-3.1-8B-Instruct
+```
+
+第 5 步：重新跑 MFE。
+
+```bash
+export CUDA_VISIBLE_DEVICES=0
+export ASCEND_RT_VISIBLE_DEVICES=0
+export MFE_VERBOSE=1
+
+python scripts/client.py --dataset gsm8k -n 1 --yaml adv_reason_3.yaml -v
+```
+
+更干净的做法是以后改 MFE 代码，让它支持环境变量展开。位置在 `parser.py` 里读取 `model = spec["model"]` 那里，可以改成 `os.path.expandvars(...)`。但你现在先别改代码，先把 YAML 改成绝对路径跑通。
+
+一句话：这个不是模型坏了，是 YAML 里的 `${MFE_MODEL_PATH}` 没有被 MFE 展开。先改成真实路径。
+
+已同步到独立 transcript：
+[https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html](https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html)
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 我的docker里面好像没有安装python包 它提示我unable to find usable engine: tried using :"pyarrow", "fastparquet"
 
 ===== assistant =====
