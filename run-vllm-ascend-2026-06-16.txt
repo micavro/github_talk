@@ -166,6 +166,96 @@ vllm serve /root/.cache/你的本地模型目录 \
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+我是想用来mfe系统来用vLLM。你再教教我怎么传文件（windows的/mfe文件夹传到vllm-ascend0616这个docker里面）
+
+===== assistant =====
+我会把这轮也追加到刚才那个独立 vLLM transcript 页面里。回答上我会按你现在的真实目标来讲：Windows 的 `mfe` 项目先到 Linux 宿主机，再通过挂载进入 `vllm-ascend0616` 容器；这样比直接往容器里拷更稳。
+
+===== assistant =====
+我把你这轮问题和将要给你的步骤已经补进独立 transcript 文件里了。现在只做提交推送，然后我把同一份步骤发给你。
+
+===== assistant =====
+最推荐的路线是：Windows 的 `mfe` 文件夹先传到公司服务器宿主机的 `~/lhy/vllm-ascend0616/mfe`，然后容器通过你已有的目录挂载直接看到它。不要优先用 `docker cp`，因为容器删了文件也容易丢；挂载目录更适合开发。
+
+第 1 步：在公司服务器宿主机上确认挂载目录存在。
+
+```bash
+mkdir -p ~/lhy/vllm-ascend0616
+```
+
+第 2 步：在 Windows PowerShell 里，把本机项目传到服务器。
+
+如果你的 Windows 项目在 `D:\lihanyang\mfe`，用：
+
+```powershell
+scp -r D:\lihanyang\mfe 用户名@服务器IP:~/lhy/vllm-ascend0616/
+```
+
+传完以后，服务器上应该有：
+
+```bash
+~/lhy/vllm-ascend0616/mfe
+```
+
+如果目录很大，第一次用 `scp -r` 可以，之后增量同步更建议用 `rsync`。Windows 如果有 Git Bash/WSL，可以用：
+
+```bash
+rsync -av --delete /d/lihanyang/mfe/ 用户名@服务器IP:~/lhy/vllm-ascend0616/mfe/
+```
+
+第 3 步：启动 docker 时挂载 `~/lhy/vllm-ascend0616`。
+
+你之前的 docker 命令里保留这一行：
+
+```bash
+-v ~/lhy/vllm-ascend0616:/root/lhy/vllm-ascend0616 \
+```
+
+这样宿主机：
+
+```bash
+~/lhy/vllm-ascend0616/mfe
+```
+
+在容器里就是：
+
+```bash
+/root/lhy/vllm-ascend0616/mfe
+```
+
+第 4 步：进容器后检查文件。
+
+```bash
+cd /root/lhy/vllm-ascend0616
+ls
+cd mfe
+ls
+```
+
+能看到你的 `mfe` 项目文件，就说明传输和挂载成功了。
+
+如果容器已经在运行，也可以临时拷进去，但这不是首选：
+
+```bash
+docker cp ~/lhy/vllm-ascend0616/mfe vllm-ascend:/root/lhy/vllm-ascend0616/mfe
+```
+
+不过更好的方式还是：先把文件放在宿主机挂载目录里，再启动容器。这样你以后更新 Windows 的 `mfe`，重新 `scp/rsync` 到宿主机，容器里马上就能看到。
+
+你现在可以先做两件事：
+
+1. Windows PowerShell 跑 `scp -r D:\lihanyang\mfe 用户名@服务器IP:~/lhy/vllm-ascend0616/`
+2. 容器里跑 `ls /root/lhy/vllm-ascend0616/mfe`
+
+如果你把服务器登录命令长什么样告诉我，比如 `ssh xxx@x.x.x.x -p 端口`，我可以把 `scp` 命令替你精确改成能直接复制执行的版本。
+
+已同步到独立 transcript：
+[https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html](https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html)
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 我不要一串命令，你一步步告诉我怎么做
 
 ===== assistant =====
