@@ -166,6 +166,69 @@ vllm serve /root/.cache/你的本地模型目录 \
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+我容器已经启动了应该
+
+===== assistant =====
+那先不要重新跑模型，先确认“容器是不是在跑”和“目录有没有挂进去”。
+
+第 1 步：宿主机上看正在运行的容器。
+
+```bash
+docker ps
+```
+
+看 `NAMES` 那一列。如果名字是 `vllm-ascend`，下一步就用它；如果不是，把下面命令里的 `vllm-ascend` 换成实际名字。
+
+第 2 步：进入已经启动的容器。
+
+```bash
+docker exec -it vllm-ascend bash
+```
+
+如果提示找不到容器名，把 `docker ps` 的输出发我。
+
+第 3 步：在容器里检查你需要的目录。
+
+```bash
+ls /workspace
+ls /workspace/Meta-Llama-3.1-8B-Instruct
+ls /workspace/mfe-ascend
+```
+
+如果这几个目录都存在，说明挂载没问题，可以继续启动 vLLM。
+
+如果 `/workspace` 不存在，或者里面没有模型和 `mfe-ascend`，说明这个容器启动时没有挂载 `~/vllm/ascend0616:/workspace`。运行中的容器不能补加挂载，这种情况需要退出容器，然后重启容器。
+
+第 4 步：如果挂载正常，再检查 NPU。
+
+```bash
+npu-smi info
+ls /dev/davinci[0-9]*
+```
+
+第 5 步：如果目录和 NPU 都正常，就先用 1 张卡启动 Llama。
+
+```bash
+export ASCEND_RT_VISIBLE_DEVICES=0
+
+vllm serve /workspace/Meta-Llama-3.1-8B-Instruct \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --served-model-name llama-3.1-8b-instruct \
+  --tensor-parallel-size 1 \
+  --gpu-memory-utilization 0.9 \
+  --trust-remote-code
+```
+
+你现在先做前 3 步就行：`docker ps`、`docker exec`、`ls /workspace`。如果 `/workspace` 里能看到两个文件夹，我们就继续跑 vLLM；如果看不到，就重启容器并补挂载。
+
+已同步到独立 transcript：
+[https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html](https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html)
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 我现在下载完了。~/vllm/ascend0616下有文件夹Meta-Llama-3.1-8B-Instruct文件夹和/mfe-ascend文件夹。接下来该怎么做
 
 ===== assistant =====
