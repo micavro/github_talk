@@ -166,6 +166,50 @@ vllm serve /root/.cache/你的本地模型目录 \
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+--shm-size是什么参数？
+
+===== assistant =====
+`--shm-size` 是 Docker 给容器分配 `/dev/shm` 共享内存大小的参数。
+
+它不是 NPU 显存，也不是模型权重占用的内存；它用的是宿主机 RAM，给容器里的多进程通信、缓存、worker 之间共享数据用。Docker 默认 `/dev/shm` 只有 `64MB`，跑 vLLM、PyTorch、多进程推理时太小，容易出现奇怪问题，比如 worker 崩、`Bus error`、进程通信失败、初始化卡住。
+
+可以这样理解：
+
+```bash
+--shm-size=16g
+```
+
+意思是：容器内 `/dev/shm` 最大可以用 16GB。
+
+进容器后可以看：
+
+```bash
+df -h /dev/shm
+```
+
+你之前命令里用过：
+
+```bash
+--shm-size=1g
+```
+
+这个对简单测试可能够，但你要跑 vLLM，尤其多卡/大模型，我建议先用：
+
+```bash
+--shm-size=16g
+```
+
+如果宿主机内存很大，也可以 `32g`。如果宿主机内存紧张，就先 `4g` 或 `8g`。
+
+一句话：`--shm-size` 是容器共享内存大小；vLLM 这类多进程推理服务建议比默认值大很多，先用 `16g` 比较稳。
+
+已同步到独立 transcript：
+[https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html](https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html)
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 我是想用来mfe系统来用vLLM。你再教教我怎么传文件（windows的/mfe文件夹传到vllm-ascend0616这个docker里面）
 
 ===== assistant =====
