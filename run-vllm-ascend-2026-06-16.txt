@@ -166,6 +166,60 @@ vllm serve /root/.cache/你的本地模型目录 \
 ::git-commit{cwd="D:\lihanyang\github_talk"}
 ::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
 ===== user =====
+MFE_DEVICE_IDS=0,1,2,3
+ASCEND_RT_VISIBLE_DEVICES=0,1,2,3
+NPU_VISIBLE_DEVICES=0,1,2,3
+
+export MFE_DEVICE_IDS=0,1,2,3 ASCEND_RT_VISIBLE_DEVICES=0,1,2,3 NPU_VISIBLE_DEVICES=0,1,2,3 VLLM_WORKER_MULTIPROC_METHOD=spawn VLLM_TARGET_DEVICE=npu VLLM_USE_V1=1 MFE_MAX_BATCH_SIZE=1 && python -m mfe.scripts.client --dataset gsm8k --yaml adv_reason_3.yaml --device-ids "$MFE_DEVICE_IDS" --accelerator ascend --max-model-len 65536 --offline -v
+
+改成8卡
+
+erty
+
+===== assistant =====
+把所有 `0,1,2,3` 改成 `0,1,2,3,4,5,6,7` 就行。完整命令是：
+
+```bash
+export MFE_DEVICE_IDS=0,1,2,3,4,5,6,7 \
+ASCEND_RT_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+NPU_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+VLLM_WORKER_MULTIPROC_METHOD=spawn \
+VLLM_TARGET_DEVICE=npu \
+VLLM_USE_V1=1 \
+MFE_MAX_BATCH_SIZE=1 && \
+python -m mfe.scripts.client \
+  --dataset gsm8k \
+  --yaml adv_reason_3.yaml \
+  --device-ids "$MFE_DEVICE_IDS" \
+  --accelerator ascend \
+  --max-model-len 65536 \
+  --offline \
+  -v
+```
+
+但先确认容器里真的挂了 8 张卡：
+
+```bash
+ls /dev/davinci[0-9]*
+```
+
+应该至少看到：
+
+```text
+/dev/davinci0 ... /dev/davinci7
+```
+
+如果容器里只有 `/dev/davinci0` 到 `/dev/davinci3`，那光改环境变量没用，必须重启容器并把 `/dev/davinci4` 到 `/dev/davinci7` 也用 `--device` 挂进去。
+
+另外确认一下语义：这个命令是让 MFE 使用 8 个设备 worker，不一定是单个 vLLM 实例做 8 卡 tensor parallel。按你现在的 MFE 用法，先这样跑是对的。
+
+已同步到独立 transcript：
+[https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html](https://micavro.github.io/github_talk/run-vllm-ascend-2026-06-16.html)
+
+::git-stage{cwd="D:\lihanyang\github_talk"}
+::git-commit{cwd="D:\lihanyang\github_talk"}
+::git-push{cwd="D:\lihanyang\github_talk" branch="main"}
+===== user =====
 error = Repo id must use alphanumeric chars, '-', '_' or '.'. The name cannot start or end with ... and the maximum length is 96 : '${MFE_MODEL_PATH}'.
 
 ===== assistant =====
